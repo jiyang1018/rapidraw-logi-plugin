@@ -1,0 +1,98 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Must match the runtime the Logi Plugin Service itself runs on. You
+         cannot compile against a PluginApi.dll that references a NEWER
+         System.Runtime than your target - that is error CS1705.
+         Options+ 6.4 ships on .NET 10; Logitech's published samples still say
+         net8.0, so trust the installed DLL over the docs.
+         tools\build-plugin.ps1 detects this from the service's runtimeconfig
+         and passes it in. Override by hand with:
+             dotnet build -p:HostTargetFramework=net8.0
+         Plain netN.0, never netN.0-windows: the same assembly has to load under
+         the plugin service on macOS too. -->
+    <HostTargetFramework Condition="'$(HostTargetFramework)' == ''">net10.0</HostTargetFramework>
+    <TargetFramework>$(HostTargetFramework)</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Loupedeck.RapidRawPlugin</RootNamespace>
+    <AssemblyName>RapidRawPlugin</AssemblyName>
+
+    <WarningLevel>4</WarningLevel>
+    <ErrorReport>prompt</ErrorReport>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+
+    <!-- Keeps the output folder flat so `pluginFolderWin: bin` in
+         LoupedeckPackage.yaml resolves to the folder holding the DLL. -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+
+    <!-- Without this, NuGet dependency DLLs are not copied next to the plugin
+         and the service fails to load it with no useful error. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+    <!-- PluginApi.dll ships with Logi Options+ / Loupedeck. There is no NuGet
+         package for it, so the host software must be installed to build.
+         tools\build-plugin.ps1 passes the folder in through the environment. -->
+    <PluginApiDir Condition="'$(PluginApiDir)' == '' AND '$(OS)' == 'Windows_NT'">C:\Program Files\Logi\LogiPluginService\</PluginApiDir>
+    <PluginApiDir Condition="'$(PluginApiDir)' == '' AND '$(OS)' != 'Windows_NT'">/Applications/Utilities/LogiPluginService.app/Contents/MonoBundle/</PluginApiDir>
+
+    <!-- Where the sideload .link file is written. -->
+    <PluginDir Condition="'$(OS)' == 'Windows_NT'">$(LocalAppData)\Logi\LogiPluginService\Plugins\</PluginDir>
+    <PluginDir Condition="'$(OS)' != 'Windows_NT'">$(HOME)/Library/Application Support/Logi/LogiPluginService/Plugins/</PluginDir>
+
+    <!-- The two-level bin is load-bearing:
+           <repo>/bin/<Config>/      <- plugin base directory, the .link points here
+           <repo>/bin/<Config>/bin/  <- the DLLs, named by pluginFolderWin -->
+    <BaseOutputPath>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'bin'))</BaseOutputPath>
+    <OutputPath>$([MSBuild]::NormalizeDirectory('$(BaseOutputPath)', '$(Configuration)', 'bin'))</OutputPath>
+    <PluginBaseDir>$([MSBuild]::NormalizeDirectory('$(BaseOutputPath)', '$(Configuration)'))</PluginBaseDir>
+
+    <!-- Must equal the `name` field in LoupedeckPackage.yaml (drives the
+         reload deep link). Must not end in "Plugin". -->
+    <PluginShortName>RapidRaw</PluginShortName>
+  </PropertyGroup>
+
+  <Target Name="CheckPluginApi" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(PluginApiDir)PluginApi.dll')"
+           Text="PluginApi.dll was not found at &quot;$(PluginApiDir)&quot;.%0A%0AThis file ships with Logitech Options+ - there is no NuGet package for it, so Options+ must be installed on this machine to build.%0A%0A  1. Install Logi Options+ and make sure it has run once.%0A  2. If it IS installed, find the file:  Get-ChildItem 'C:\Program Files' -Recurse -Filter PluginApi.dll -EA SilentlyContinue%0A  3. Then run tools\build-plugin.ps1 -PluginApiDir &quot;C:\That\Folder&quot;" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="PluginApi">
+      <HintPath>$(PluginApiDir)PluginApi.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Copy package/** into the plugin base directory. -->
+  <Target Name="CopyPackage" AfterTargets="PostBuildEvent">
+    <ItemGroup>
+      <PackageFiles Include="package\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PackageFiles)" DestinationFolder="$(PluginBaseDir)%(RecursiveDir)" />
+  </Target>
+
+  <!-- Write the .link (sideload) and ask the service to reload the plugin. -->
+  <Target Name="PostBuild" AfterTargets="CopyPackage">
+    <MakeDir Directories="$(PluginDir)" />
+    <WriteLinesToFile File="$(PluginDir)$(ProjectName).link"
+                      Lines="$(PluginBaseDir)"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'"
+          Command="start loupedeck:plugin/$(PluginShortName)/reload"
+          ContinueOnError="true" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'"
+          Command="open loupedeck:plugin/$(PluginShortName)/reload"
+          ContinueOnError="true" />
+  </Target>
+
+  <!-- Remove the sideload on `dotnet clean`. -->
+  <Target Name="PluginClean" AfterTargets="CoreClean">
+    <Delete Files="$(PluginDir)$(ProjectName).link" />
+    <RemoveDir Directories="$(PluginBaseDir)" />
+  </Target>
+
+</Project>

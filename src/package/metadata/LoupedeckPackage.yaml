@@ -1,0 +1,54 @@
+# =============================================================================
+# GENERAL
+# =============================================================================
+
+# Package type. Always plugin4 for plugins.
+type: plugin4
+
+# Unique immutable id. Regex [a-zA-Z0-9_-]+ and it must NOT end with "Plugin".
+# Also used by the reload deep link (loupedeck:plugin/RapidRaw/reload) and must
+# match $(PluginShortName) in the .csproj.
+name: RapidRaw
+
+displayName: RapidRAW
+description: >-
+  Live control of RapidRAW's develop sliders from the MX Creative Console
+  dials, plus undo/redo, image navigation, ratings and colour labels on the
+  keys. Talks to RapidRAW's external control API on 127.0.0.1:47820.
+
+# The built assembly.
+pluginFileName: RapidRawPlugin.dll
+
+version: 0.1.0
+author: Alex
+copyright: Copyright (c) 2026 Alex. All rights reserved.
+
+# Minimum Logi Plugin Service version.
+minimumLoupedeckVersion: 6.0
+
+# =============================================================================
+# PLUGIN PROPERTIES
+# =============================================================================
+
+# Relative to the plugin base directory (the folder the .link file points at).
+pluginFolderWin: bin
+pluginFolderMac: bin
+
+supportedDevices:
+    # Logitech MX Creative Console (Keypad + Dialpad).
+    - LoupedeckExtendedFamily
+    # Loupedeck CT / Live / Live S, Razer Stream Controller (+ X).
+    - LoupedeckCtFamily
+
+pluginCapabilities:
+    # Application plugin: binds to RapidRAW so its profile auto-activates.
+    # No ActivatesApplication: nothing is sent as keystrokes, everything goes
+    # over the local socket.
+    - HasApplication
+
+# =============================================================================
+# MARKETPLACE
+# =============================================================================
+
+license: MIT
+licenseUrl: https://opensource.org/licenses/MIT

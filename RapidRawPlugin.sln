@@ -1,0 +1,30 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RapidRawPlugin", "src\RapidRawPlugin.csproj", "{3C7E2B91-5A0D-4F6E-8C21-9D4B7E1A2F55}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{6B1F4D08-2C93-47A5-B7E0-1E5D8A9C3F42}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+		src\package\metadata\LoupedeckPackage.yaml = src\package\metadata\LoupedeckPackage.yaml
+		tools\build-plugin.ps1 = tools\build-plugin.ps1
+		tools\smoke-test.ps1 = tools\smoke-test.ps1
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3C7E2B91-5A0D-4F6E-8C21-9D4B7E1A2F55}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C7E2B91-5A0D-4F6E-8C21-9D4B7E1A2F55}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C7E2B91-5A0D-4F6E-8C21-9D4B7E1A2F55}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C7E2B91-5A0D-4F6E-8C21-9D4B7E1A2F55}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

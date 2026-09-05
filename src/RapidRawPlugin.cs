@@ -1,38 +1,95 @@
-// RapidRAW plugin for Logi Actions SDK (MX Creative Console / Loupedeck)
-// Skeleton — generate the real project with:
-//   dotnet tool install -g LogiPluginTool
-//   logiplugintool generate RapidRaw
-// then drop these classes in. API names follow the Loupedeck-heritage SDK;
-// verify against the template the tool generates for your SDK version.
-
 namespace Loupedeck.RapidRawPlugin
 {
     using System;
+    using System.Threading;
 
+    /// <summary>
+    /// Logi Actions plugin that drives RapidRAW's develop sliders live over its
+    /// external control API (TCP 127.0.0.1:47820, newline-delimited JSON).
+    /// </summary>
     public class RapidRawPlugin : Plugin
     {
-        // Dialpad/keypad control of a desktop app: no elevated rights needed
+        /// <summary>Everything goes over the socket; no keyboard shortcuts are sent.</summary>
         public override Boolean UsesApplicationApiOnly => true;
+
+        /// <summary>False = this is an application plugin, bound to RapidRAW.</summary>
         public override Boolean HasNoApplication => false;
 
-        internal RapidRawClient Client { get; } = new RapidRawClient("ws://127.0.0.1:43917");
+        // 1 while a warning is on display, so it can be cleared once the
+        // condition that raised it has passed.
+        private Int32 _degraded;
+
+        internal RapidRawClient Client { get; } = new RapidRawClient();
+
+        /// <summary>
+        /// Raised when something other than a parameter value changes what the
+        /// dial readouts should show: the link came up or went down, an image was
+        /// opened or closed. The actions repaint on it.
+        /// </summary>
+        internal event EventHandler ReadoutsInvalidated;
+
+        public RapidRawPlugin()
+        {
+            // Deliberately empty. PluginLog.Init / PluginResources.Init from the
+            // template are not part of PluginApi.dll; Diag logs to a file and
+            // to Plugin.Log instead.
+        }
 
         public override void Load()
         {
-            this.Info.DisplayName = "RapidRAW";
+            Diag.Attach(this.Log);
+            Diag.Info("Plugin loading.");
 
             this.Client.Connected += (s, e) =>
-                this.OnPluginStatusChanged(PluginStatus.Normal, "Connected to RapidRAW", null, null);
+            {
+                this.ClearDegradedStatus("Connected to RapidRAW", force: true);
+                this.ReadoutsInvalidated?.Invoke(this, EventArgs.Empty);
+            };
 
             this.Client.Disconnected += (s, e) =>
-                this.OnPluginStatusChanged(
-                    PluginStatus.Warning,
-                    "RapidRAW not reachable — enable Settings → Control Surface API",
-                    "https://github.com/CyberTimon/RapidRAW", "RapidRAW setup");
+            {
+                this.SetDegradedStatus(
+                    global::Loupedeck.PluginStatus.Warning,
+                    "RapidRAW not reachable. Start RapidRAW (the external-control build) and open an image.",
+                    "https://github.com/CyberTimon/RapidRAW",
+                    "RapidRAW");
+                this.ReadoutsInvalidated?.Invoke(this, EventArgs.Empty);
+            };
 
-            this.Client.Start(); // async connect + auto-reconnect loop
+            this.Client.StateChanged += (s, e) =>
+            {
+                if (e.ContextChanged)
+                {
+                    this.ReadoutsInvalidated?.Invoke(this, EventArgs.Empty);
+                }
+            };
+
+            this.Client.ErrorReceived += (s, e) => Diag.Warning("RapidRAW reported: " + e.Message);
+
+            this.Client.Start();
         }
 
-        public override void Unload() => this.Client.Stop();
+        private void SetDegradedStatus(global::Loupedeck.PluginStatus status, String message, String url = null, String urlTitle = null)
+        {
+            Volatile.Write(ref this._degraded, 1);
+            if (url == null)
+            {
+                this.OnPluginStatusChanged(status, message);
+            }
+            else
+            {
+                this.OnPluginStatusChanged(status, message, url, urlTitle);
+            }
+        }
+
+        private void ClearDegradedStatus(String message, Boolean force = false)
+        {
+            if (Interlocked.Exchange(ref this._degraded, 0) == 1 || force)
+            {
+                this.OnPluginStatusChanged(global::Loupedeck.PluginStatus.Normal, message);
+            }
+        }
+
+        public override void Unload() => this.Client.Dispose();
     }
 }
