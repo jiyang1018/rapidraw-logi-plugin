@@ -1,0 +1,5 @@
+# Shell scripts must stay LF or they break on macOS; PowerShell is happiest with CRLF.
+*.sh   text eol=lf
+*.ps1  text eol=crlf
+*.svg  text eol=lf
+*.png  binary
