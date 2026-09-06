@@ -30,6 +30,10 @@
 .PARAMETER LightroomDir
     The Lightroom plugin's actionicons folder, if it is somewhere unusual.
 
+.PARAMETER Pause
+    Wait for Enter before closing. Used by the Start Menu shortcuts the installer
+    creates, so the result stays readable.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File tools\use-logi-icons.ps1
     powershell -ExecutionPolicy Bypass -File tools\use-logi-icons.ps1 -Restore
@@ -39,7 +43,8 @@
 param(
     [switch] $Restore,
     [string] $PluginDir,
-    [string] $LightroomDir
+    [string] $LightroomDir,
+    [switch] $Pause
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,11 +55,15 @@ $Cmd = "$Ns.RapidRawCommands"
 
 function Write-Ok   { param([string]$m) Write-Host "  OK    $m" -ForegroundColor Green }
 function Write-Info { param([string]$m) Write-Host "        $m" -ForegroundColor DarkGray }
+function Finish([int]$code) {
+    if ($Pause) { Write-Host ''; Read-Host 'Press Enter to close' | Out-Null }
+    exit $code
+}
 function Fail {
     param([string]$Problem, [string[]]$Fix)
     Write-Host "  STOP  $Problem" -ForegroundColor Red
     foreach ($line in $Fix) { Write-Host "        $line" -ForegroundColor Yellow }
-    exit 1
+    Finish 1
 }
 
 # --- locate the RapidRAW plugin ----------------------------------------------
@@ -101,7 +110,7 @@ if ($Restore) {
     Write-Ok 'Original icons restored.'
     Start-Process 'loupedeck:plugin/RapidRaw/reload' -ErrorAction SilentlyContinue
     Write-Host "`n  Done. Options+ has been asked to reload the plugin.`n" -ForegroundColor Green
-    exit 0
+    Finish 0
 }
 
 # --- locate the Lightroom plugin's icons ------------------------------------
@@ -240,3 +249,4 @@ Write-Host '  Done. Options+ has been asked to reload the plugin; if the icons d
 Write-Host '  quit Options+ from the tray and reopen it.' -ForegroundColor Green
 Write-Host "  Undo:  .\use-logi-icons.ps1 -Restore" -ForegroundColor DarkGray
 Write-Host ''
+Finish 0
