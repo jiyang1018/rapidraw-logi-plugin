@@ -17,6 +17,11 @@ namespace Loupedeck.RapidRawPlugin
             this.Description = "Editor actions in RapidRAW: history, navigation, rating, view.";
             this.GroupName = "Actions";
 
+            // The MX Creative Console dial has no press and Options+ never tells a
+            // plugin which ring item is highlighted, so the reset is "press, then
+            // turn": this key arms a reset and the next dial movement (within 5 s)
+            // resets that slider instead of adjusting it. Press again to cancel.
+            this.AddParameter("reset_active", "Reset (then turn dial)", "Edit");
             this.AddParameter("undo", "Undo", "Edit");
             this.AddParameter("redo", "Redo", "Edit");
             this.AddParameter("copy_adjustments", "Copy adjustments", "Edit");
@@ -61,12 +66,24 @@ namespace Loupedeck.RapidRawPlugin
 
             this.AddParameter("brush_size_up", "Brush size +", "Masks");
             this.AddParameter("brush_size_down", "Brush size -", "Masks");
+
+            // Dedicated reset keys for the everyday sliders only; ~90 of them made
+            // the dialpad-button picker unreadable.
+            foreach (var def in RapidRawAdjustments.All)
+            {
+                if (def.Group == "Basic" || def.Group == "Color" || def.Group == "Details")
+                {
+                    // Prefix uses a hyphen: the id doubles as the icon file name and NTFS forbids colons.
+                    this.AddParameter("reset-" + def.Id, "Reset " + def.Label, "Reset###" + def.Group);
+                }
+            }
         }
 
         protected override Boolean OnLoad()
         {
             // Repaint the keys that show live state.
             this.RrPlugin.ReadoutsInvalidated += (s, e) => this.ActionImageChanged();
+            this.RrPlugin.ResetArmChanged += (s, e) => this.ActionImageChanged("reset_active");
             this.RrPlugin.Client.StateChanged += (s, e) =>
             {
                 if (e.ContextChanged)
@@ -77,12 +94,43 @@ namespace Loupedeck.RapidRawPlugin
             return true;
         }
 
-        protected override void RunCommand(String actionParameter) =>
+        protected override void RunCommand(String actionParameter)
+        {
+            if (actionParameter == "reset_active")
+            {
+                if (this.RrPlugin.IsResetArmed)
+                {
+                    Diag.Info("reset disarmed");
+                    this.RrPlugin.DisarmReset();
+                }
+                else
+                {
+                    Diag.Info("reset armed; waiting for a dial movement");
+                    this.RrPlugin.ArmReset();
+                }
+
+                return;
+            }
+
+            if (actionParameter != null && actionParameter.StartsWith("reset-", StringComparison.Ordinal))
+            {
+                var id = actionParameter.Substring(6);
+                Diag.Info($"reset {id}");
+                this.RrPlugin.Client.SendReset(id);
+                return;
+            }
+
             this.RrPlugin.Client.SendAction(actionParameter);
+        }
 
         protected override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize)
         {
             var client = this.RrPlugin.Client;
+            if (actionParameter == "reset_active")
+            {
+                return this.RrPlugin.IsResetArmed ? "RESET\nturn dial" : "Reset";
+            }
+
             if (actionParameter != null && actionParameter.StartsWith("rate_", StringComparison.Ordinal) &&
                 client.IsConnected && client.IsImageOpen)
             {

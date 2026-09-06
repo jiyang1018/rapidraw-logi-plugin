@@ -21,6 +21,59 @@ namespace Loupedeck.RapidRawPlugin
 
         internal RapidRawClient Client { get; } = new RapidRawClient();
 
+        /// <summary>How long an armed reset waits for a dial movement.</summary>
+        internal const Int32 ResetArmMs = 5000;
+
+        private Int64 _resetArmedUntil;
+        private Timer _resetArmTimer;
+
+        /// <summary>
+        /// "Press Reset, then turn the dial you mean." Options+ never tells a
+        /// plugin which Actions Ring item is highlighted and the MX dial cannot be
+        /// pressed, so the reset key arms instead: the next dial movement within
+        /// <see cref="ResetArmMs"/> resets that slider rather than adjusting it.
+        /// </summary>
+        internal Boolean IsResetArmed => Environment.TickCount64 < Volatile.Read(ref this._resetArmedUntil);
+
+        /// <summary>Raised when the armed state changes, so the key can repaint.</summary>
+        internal event EventHandler ResetArmChanged;
+
+        internal void ArmReset()
+        {
+            Volatile.Write(ref this._resetArmedUntil, Environment.TickCount64 + ResetArmMs);
+            this.ResetArmChanged?.Invoke(this, EventArgs.Empty);
+
+            // Repaint again when it expires untouched.
+            this._resetArmTimer?.Dispose();
+            this._resetArmTimer = new Timer(_ =>
+            {
+                if (!this.IsResetArmed)
+                {
+                    this.ResetArmChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }, null, ResetArmMs + 50, Timeout.Infinite);
+        }
+
+        internal void DisarmReset()
+        {
+            Volatile.Write(ref this._resetArmedUntil, 0);
+            this._resetArmTimer?.Dispose();
+            this._resetArmTimer = null;
+            this.ResetArmChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>True once: the dial movement that consumes the armed reset.</summary>
+        internal Boolean TryConsumeArmedReset()
+        {
+            if (!this.IsResetArmed)
+            {
+                return false;
+            }
+
+            this.DisarmReset();
+            return true;
+        }
+
         /// <summary>
         /// Raised when something other than a parameter value changes what the
         /// dial readouts should show: the link came up or went down, an image was
@@ -90,6 +143,10 @@ namespace Loupedeck.RapidRawPlugin
             }
         }
 
-        public override void Unload() => this.Client.Dispose();
+        public override void Unload()
+        {
+            this._resetArmTimer?.Dispose();
+            this.Client.Dispose();
+        }
     }
 }
